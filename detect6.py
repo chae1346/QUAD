@@ -44,14 +44,15 @@ from utils.general import (LOGGER, check_file, check_img_size, check_imshow, che
                            increment_path, non_max_suppression, print_args, scale_coords, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
-
+from collections import Counter
+import datetime
 
 @torch.no_grad()
 def run(
         weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
         source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
         data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
-        imgsz=(640, 640),  # inference size (height, width)
+        imgsz=(320, 320),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
         max_det=1000,  # maximum detections per image
@@ -132,6 +133,28 @@ def run(
 
         # Process predictions
         for i, det in enumerate(pred):  # per image
+            # Collect detected classes for saving
+            detected_classes = [names[int(cls)] for *xyxy, conf, cls in det]
+            save_detected_classes_to_txt(detected_classes)
+            if isinstance(im0s, list):
+                im0 = im0s[i].copy()
+            else:
+                im0 = im0s.copy()
+
+            annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+            if len(det):
+                # Rescale boxes from img_size to im0 size
+                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
+
+                # Add bounding boxes to the image
+                for *xyxy, conf, cls in reversed(det):
+                    c = int(cls)  # integer class
+                    label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
+                    annotator.box_label(xyxy, label, color=colors(c, True))
+
+            last_image = annotator.result()  # Store the image with bounding boxes
+            compare_and_update(detected_classes, last_image=last_image)  # Compare and update detected_classes.txt and save last image if necessary
+
             seen += 1
             if webcam:  # batch_size >= 1
                 p, im0, frame = path[i], im0s[i].copy(), dataset.count
@@ -145,16 +168,11 @@ def run(
             s += '%gx%g ' % im.shape[2:]  # print string
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
-            annotator = Annotator(im0, line_width=line_thickness, example=str(names))
             if len(det):
-                # Rescale boxes from img_size to im0 size
-                det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
-
                 # Print results
                 for c in det[:, -1].unique():
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -245,8 +263,66 @@ def parse_opt():
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
+    
+def save_detected_classes_to_txt(detected_classes, output_path='detected_classes.txt'):
+    # Count each class occurrence directly from detected class names
+    class_counts = Counter(detected_classes)
+    
+    # Write the counts to a txt file
+    with open(output_path, 'w') as f:
+        for class_name, count in class_counts.items():
+            f.write(f"{class_name}: {count}\n")
+
+def read_file_content(file_path):
+    if not os.path.exists(file_path):
+        return ""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return f.read().strip()
+        
+import datetime
+
+def save_detected_classes_to_txt(detected_classes, output_path='detected_classes.txt'):
+    # Count each class occurrence directly from detected class names
+    class_counts = Counter(detected_classes)
+    
+    # Write the counts to a txt file
+    with open(output_path, 'w', encoding='utf-8') as f:
+        for class_name, count in class_counts.items():
+            f.write(f"{class_name}: {count}\n")
+
+def read_file_content(file_path):
+    if not os.path.exists(file_path):
+        return ""
+    with open(file_path, 'r', encoding='utf-8') as f:
+        return f.read().strip()
+        
+def compare_and_update(detected_classes, list_file='List.txt', detected_file='detected_classes.txt', last_image=None, save_path='final_detected_image.jpg'):
+    # Save detected classes to detected_classes.txt
+    save_detected_classes_to_txt(detected_classes, detected_file)
+    
+    # Read the content of List.txt and detected_classes.txt
+    list_content = read_file_content(list_file)
+    detected_content = read_file_content(detected_file)
+    
+    # Compare the content
+    if list_content == detected_content:
+        print("Contents are the same. Saving the last detected image and exiting...")
+        if last_image is not None:
+            cv2.imwrite(save_path, last_image)
+            print(f"Last detected image saved to {save_path}")
+
+        # 현재 시각을 추가하여 detected_classes.txt 업데이트
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(detected_file, 'a', encoding='utf-8') as f:
+            f.write(f"\nTimestamp: {current_time}\n")
+
+        sys.exit()  # Exit the program if contents are the same
+    else:
+        print("Contents are different. Continuing...")
 
 
+        
+        
 if __name__ == "__main__":
     opt = parse_opt()
     main(opt)
