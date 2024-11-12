@@ -1,5 +1,5 @@
 11/12 11:17 update...
 
-mavros_circle.py 좌표 수정 완.
+src/my_ros_pkg/mavros_circle.py
 
-detect.py 뭐더라?
+src/yolo.../src/detect.py 뭐더라?
