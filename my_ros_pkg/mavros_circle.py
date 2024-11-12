@@ -1,4 +1,5 @@
 # subprocess.Popen로 detect.py 실행 (원형경로 이동)
+# 좌표 변경 전
 
 import rospy
 from mavros_msgs.msg import State
