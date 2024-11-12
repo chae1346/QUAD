@@ -14,8 +14,8 @@ if __name__ == "__main__":
     current_state = State()
     pose = PoseStamped()
     radius = 0.5 
-    target_positions = [(0.2, 0.2), (0.3, 0.3)] 
-    reach_tolerance = 0.5  # 오차(m)
+    target_positions = [(0.5, 0), (-0.25, -0.433)] 
+    reach_tolerance = 0.15  # 오차(m)
 
     def state_cb(msg):
         global current_state
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                     rate.sleep()
 
                 # detect.py 실행 및 대기
-                detect_process = subprocess.Popen(["python3", "/yolov5-python3.6.9-jetson/yolo_detect.3py"])
+                detect_process = subprocess.Popen(["python3", "/home/quad/yolov5-python3.6.9-jetson/detect5.py"])
                 detect_process.wait()  # detect.py 종료될 때까지 대기
 
                 rospy.loginfo("detect.py completed. Continuing circular path.")
@@ -94,15 +94,18 @@ if __name__ == "__main__":
                 target_index += 1
                 if target_index >= len(target_positions):
                     rospy.loginfo("All target positions reached. Initiating landing.")
-                    set_mode_client.call(land_set_mode)  # 착륙 모드 요청
+                    if set_mode_client.call(land_set_mode).mode_sent:
+                    	rospy.loginfo("Landing mode enabled")
+		    else:
+			rospy.logwarn("Failed to enable landing mode")
+
                     break  # 루프 종료
 
 
             # theta 값 업데이트하여 원을 따라 계속 이동
-            theta += 0.02
+            theta += 0.012
             if theta > 2 * math.pi:  # 각도 초기화
                 theta = 0.01
 
         local_pos_pub.publish(pose)
-        rate.sleep()
-
+        rate.sleep() # 0.1초 대기
