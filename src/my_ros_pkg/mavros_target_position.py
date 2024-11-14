@@ -1,5 +1,5 @@
 # 목표지점으로 이동
-# SLAM에서 Odometry 메시지를 통해 현위치 확인 및 
+# PoseStamped로 현 위치 확인
 
 import rospy
 from mavros_msgs.msg import State
@@ -7,6 +7,7 @@ from mavros_msgs.srv import CommandBool, SetMode, CommandBoolRequest, SetModeReq
 from nav_msgs.msg import Odometry # Odometry 메시지를 통해 SLAM이나 위치 추적 정보를 얻을 때 사용
 from geometry_msgs.msg import PoseStamped
 import subprocess
+import math
 
 def main():
     rospy.init_node('mavros_circle', anonymous=True)
@@ -23,7 +24,8 @@ def main():
     target_index = 0 
 
     # ROS Topic 처리
-    rospy.Subscriber("/slam/odom", Odometry, odom_callback) # SLAM 위치 정보 수신
+    # rospy.Subscriber("/slam/odom", Odometry, odom_callback) # SLAM 위치 정보 수신
+    rospy.Subscriber("/mavros/local_position/pose", PoseStamped, pose_callback)  # 현위치 정보 수신
     rospy.Subscriber("/mavros/state", State, state_cb) # MAVROS 상태 정보 수신
     local_pos_pub = rospy.Publisher("/mavros/setpoint_position/local", PoseStamped, queue_size=10) # 위치 명령 전송
 
@@ -84,9 +86,14 @@ def main():
         rate.sleep() # 0.1초 대기
 
 # SLAM 위치 정보를 업데이트
-def odom_callback(msg):
+#def odom_callback(msg):
+#   global current_position
+#   current_position = (msg.pose.pose.position.x, msg.pose.pose.position.y) # data format: Pose(position=Point(x, y, z), orientation=Quaternion(x, y, z, w))
+
+# PoseStamped를 통해 현위치 정보를 업데이트
+def pose_callback(msg):
     global current_position
-    current_position = (msg.pose.pose.position.x, msg.pose.pose.position.y) # data format: Pose(position=Point(x, y, z), orientation=Quaternion(x, y, z, w))
+    current_position = (msg.pose.position.x, msg.pose.position.y)
 
 # ROS 드론 현재 상태()
 def state_cb(msg):
