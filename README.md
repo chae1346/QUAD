@@ -1,5 +1,5 @@
-11/12 17:55 update...
+11/15 16:54 update...
 
-src/my_ros_pkg/mavros_circle_edited.py
+src/my_ros_pkg/mavros.py
 
-src/yolo.../detect(final).py
+src/yolo.../detect7.py
