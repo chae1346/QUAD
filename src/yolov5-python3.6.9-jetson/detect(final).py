@@ -265,14 +265,14 @@ def parse_opt():
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     
-    detected_classes = run(**vars(opt))
+    detected_classes = run(**vars(opt)) or []
+    if not detected_classes:
+        print("No detected classes. Continuing with empty results...")
     compare_and_update(detected_classes) 
 
 def save_detected_classes_to_txt(detected_classes, output_path='detected_classes.txt'):
-    # Count each class occurrence directly from detected class names
     class_counts = Counter(detected_classes)
     
-    # Write the counts to a txt file
     with open(output_path, 'w') as f:
         for class_name, count in class_counts.items():
             f.write(f"{class_name}: {count}\n")
@@ -280,11 +280,14 @@ def save_detected_classes_to_txt(detected_classes, output_path='detected_classes
 def read_file_content(file_path):
     if not os.path.exists(file_path):
         return ""
+    # Write the counts to a txt file
     with open(file_path, 'r', encoding='utf-8') as f:
         return f.read().strip()
         
 def compare_and_update(detected_classes, list_file='List.txt', detected_file='detected_classes.txt', last_image=None, save_path='final_detected_image.jpg'):
-    # Save detected classes to detected_classes.txt
+    if not detected_classes:
+        print("No detected classes to compare. Skipping...")
+        return
     save_detected_classes_to_txt(detected_classes, detected_file)
     
     # Read the content of List.txt and detected_classes.txt
@@ -303,7 +306,7 @@ def compare_and_update(detected_classes, list_file='List.txt', detected_file='de
         with open(detected_file, 'a', encoding='utf-8') as f:
             f.write(f"\nTimestamp: {current_time}\n")
 
-        sys.exit()  # Exit the program if contents are the same
+        return
     else:
         print("Contents are different. Continuing...")
 
