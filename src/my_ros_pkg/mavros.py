@@ -16,7 +16,7 @@ data_lock = threading.Lock()
 
 def Run_Yolo():
     global last_detected 
-    command = ["python3", "/home/quad/yolov5-python3.6.9-jetson/detect6.py"]
+    command = ["python3", "/home/quad/yolov5-python3.6.9-jetson/detect7.py"]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, text=True)
 
     for line in iter(process.stdout.readline, ''):
