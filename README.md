@@ -7,7 +7,7 @@
      └─> 노트북 (YOLO 실행)
           └─> 결과를 ROS 토픽으로 Jetson Nano에 전달
           
-src/my_ros_pkg/mavros.py
+src/my_ros_pkg/offboard.py
 
 1. 오프보드 코드가 목표 지점 도달 여부를 판단:
     SLAM으로부터 토픽을 구독하지 못했을 경우, MAVROS 데이터 및 키보드 인터럽트 사용.
