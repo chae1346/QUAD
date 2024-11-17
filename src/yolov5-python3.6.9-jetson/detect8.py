@@ -12,123 +12,123 @@ from utils.general import check_file, check_img_size, non_max_suppression, scale
 from utils.torch_utils import select_device, time_sync
 from utils.plots import Annotator, colors
 import cv2
-
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
 
 @torch.no_grad()
+
+
+def log_message(message, text_widget):
+    print(message)  # Output to terminal
+    text_widget.insert(tk.END, message + "\n")
+    text_widget.see(tk.END)
+
+def print_format(data):
+    return "\n".join(f"{key}: {value}" for key, value in data.items())
+
+def update_list_memory(original_list, detected_data, text_widget):
+    log_message("Original list:\n" + print_format(original_list), text_widget)
+
+    for name, count in detected_data.items():
+        if name not in original_list:
+            log_message(f"{name} 추가.", text_widget)
+            original_list[name] = count
+        elif original_list[name] != count:
+            log_message(f"{name} 수량 업데이트.", text_widget)
+            original_list[name] = count
+        else:
+            print(f"{name} 수량 일치.")
+
+    return original_list
+
+
+
+
+
+
+def create_gui(simulation_function):
+    # Create a GUI window
+    root = tk.Tk()
+    root.title("Real-Time List Update Viewer")
+
+    # Add a ScrolledText widget to display updates
+    text_widget = ScrolledText(root, wrap=tk.WORD, width=50, height=20)
+    text_widget.pack(padx=10, pady=10)
+
+    # Start the GUI loop
+    root.mainloop()
+
 def run(
         weights, source, data, imgsz, conf_thres, iou_thres, max_det, device,
         save_txt, save_conf, save_crop, nosave, classes, agnostic_nms,
         augment, visualize, project, name, exist_ok, line_thickness,
         hide_labels, hide_conf, half, dnn
 ):
-    source = str(source)
-    save_img = not nosave and not source.endswith('.txt')
-    is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
-    webcam = source.startswith(('rtsp://', 'http://', 'https://')) or source.isnumeric()
-    if is_file:
-        source = check_file(source)
-
-    # Directories
-    save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)
-    (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
-
     # Load model
     device = select_device(device)
     model = DetectMultiBackend(weights, device=device, dnn=dnn, data=data, fp16=half)
     stride, names, pt = model.stride, model.names, model.pt
     imgsz = check_img_size(imgsz, s=stride)
 
-    # Dataloader
+    # Set up source, 뽑을 곳.
+    source = str(source)
+    save_img = not nosave and not source.endswith('.txt')
+    is_file = Path(source).suffix[1:] in (IMG_FORMATS + VID_FORMATS)
+    # 스트리밍 URL이나 웹캠이면 True, 이미지/비디오파일 등이면 False
+    webcam = source.startswith(('rtsp://', 'http://', 'https://')) or source.isnumeric()
+    if is_file:
+        source = check_file(source)
+
+    # Set up directories, 저장할 곳.
+    save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)
+    (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)
+
+    # Set up dataloader, webcam = 1이면 받아옴.
     dataset = LoadStreams(source, img_size=imgsz, stride=stride, auto=pt) if webcam else LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
     bs = 1 if not webcam else len(dataset)
 
     # Run inference
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))
-    detected_classes = []
+    detected_classes = {}
+    detected_frame = None
+
     for path, im, im0s, vid_cap, s in dataset:
         t1 = time_sync()
+
         im = torch.from_numpy(im).to(device)
         im = im.half() if model.fp16 else im.float()
         im /= 255
         if len(im.shape) == 3:
             im = im[None]
+
         t2 = time_sync()
 
-        pred = model(im, augment=augment)
+        pred = model(im, augment=augment) # 객체 탐지
+
         t3 = time_sync()
 
+        # 중복 박스 제거, 최종 탐지결과 반환
         pred = non_max_suppression(pred, conf_thres, iou_thres, classes, agnostic_nms, max_det=max_det)
 
         for det in pred:
             if len(det):
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0s.shape).round()
-                detected_classes += [names[int(cls)] for *xyxy, conf, cls in det]
+                detected_frame = im0s  # 탐지된 프레임 저장 (마지막 프레임)
+                # 탐지된 객체를 딕셔너리로 저장
+                for *xyxy, conf, cls in det:
+                    class_name = names[int(cls)]
+                    detected_classes[class_name] = detected_classes.get(class_name, 0) + 1
+    
+    save_path = os.path.expanduser("~/detected_frame.jpg")
+    cv2.imwrite(save_path, detected_frame)
+    print(f"Saved detected frame to {save_path}")
+
+    # 이미지 화면에 띄우기
+    cv2.imshow("Detected Frame", detected_frame)  # OpenCV 창에 이미지 표시
+    cv2.waitKey(0)  # 키 입력 대기 (0: 무한 대기)
+    cv2.destroyAllWindows()  # 모든 OpenCV 창 닫기
+    
     return detected_classes
-
-
-def save_detected_classes_to_txt(detected_classes, output_path='detected_classes.txt'):
-    class_counts = Counter(detected_classes)
-    with open(output_path, 'w') as f:
-        for class_name, count in class_counts.items():
-            f.write(f"{class_name}: {count}\n")
-
-
-def read_file_content(file_path):
-    if not os.path.exists(file_path):
-        return ""
-    with open(file_path, 'r', encoding='utf-8') as f:
-        return f.read().strip()
-
-
-def compare_and_update(detected_classes, list_file='List.txt', detected_file='detected_classes.txt', last_image=None, save_path='final_detected_image.jpg'):
-    if not detected_classes:
-        print("No detected classes to compare. Skipping...")
-        return
-    save_detected_classes_to_txt(detected_classes, detected_file)
-    list_content = read_file_content(list_file)
-    detected_content = read_file_content(detected_file)
-
-    if list_content == detected_content:
-        print("Contents are the same. Saving the last detected image and exiting...")
-        if last_image is not None:
-            cv2.imwrite(save_path, last_image)
-            print(f"Last detected image saved to {save_path}")
-
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(detected_file, 'a', encoding='utf-8') as f:
-            f.write(f"\nTimestamp: {current_time}\n")
-        return
-    else:
-        print("Contents are different. Continuing...")
-
-
-def detection_callback(msg):
-    rospy.loginfo("Received detection command. Running YOLO on live stream...")
-    
-    # YOLO 실행 옵션 설정
-    opt = parse_opt()
-    opt.source = 'rtsp://example.com/live_stream'  # 카메라 스트리밍 URL
-    opt.imgsz = [640, 640]  # 이미지 크기
-    opt.conf_thres = 0.25  # Confidence threshold
-    opt.iou_thres = 0.45  # IoU threshold for NMS
-    opt.device = '0'  # GPU 사용
-    opt.classes = None  # 모든 클래스 감지
-    opt.augment = False  # 증강 비활성화
-
-    detected_classes = run(**vars(opt)) or []
-    
-    if not detected_classes:
-        rospy.loginfo("No detected classes. Continuing...")
-    else:
-        rospy.loginfo(f"Detected classes: {detected_classes}")
-    
-    # 결과 비교 및 업데이트
-    compare_and_update(detected_classes)
-    rospy.loginfo("YOLO detection on live stream completed.")
-
-    # 객체 인식 완료 신호 발행
-    detection_done_pub.publish("Detection completed")
-
 
 def parse_opt():
     parser = argparse.ArgumentParser()
@@ -153,21 +153,57 @@ def parse_opt():
     opt = parser.parse_args([])
     return opt
 
+def detection_callback(msg):
+    print("Received detection command. Running YOLO on live stream...")
+    
+    # YOLO 실행 옵션 설정
+    opt = parse_opt()
+    opt.source = 'http://192.168.0.101:8080/video'  # 카메라 스트리밍 URL
+    opt.imgsz = [320, 320]  # 이미지 크기
+    opt.conf_thres = 0.25  # Confidence threshold
+    opt.iou_thres = 0.45  # IoU threshold for NMS
+    opt.device = '0'  # GPU 사용
+    opt.classes = None  # 모든 클래스 감지
+    opt.augment = False  # 증강 비활성화
+
+    detected_classes = run(**vars(opt)) or []
+    
+    if not detected_classes:
+        print("No detected classes. Continuing...")
+    else:
+        print(f"Detected classes: {detected_classes}")
+
+        # Save detected frames in the home directory
+        for i, frame in enumerate(detected_frames):
+            save_path = os.path.expanduser(f"~/detected_frame_{i+1}.jpg")
+            cv2.imwrite(save_path, frame)
+            print(f"Saved detected frame to {save_path}")
+
+            # Display the saved image
+            image = cv2.imread(save_path)
+            if image is not None:
+                cv2.imshow(f"Detected Frame {i+1}", image)
+                cv2.waitKey(0)  # Wait for a key press to close the image window
+                cv2.destroyAllWindows()
+    
+    # 결과 비교 및 업데이트
+    update_list_memory(detected_classes)
+    print("YOLO detection on live stream completed.")
+
+    # 객체 인식 완료 메시지 발행
+    detection_done = rospy.Publisher('/detection_done', String, queue_size=10)
+    detection_done.publish("Detection completed")
 
 def main():
-    global detection_done_pub
-
     rospy.init_node('yolo_detection_node', anonymous=True)
 
-    # 객체 인식 완료 토픽 퍼블리셔 설정
-    detection_done_pub = rospy.Publisher('/detection_done', String, queue_size=10)
-
-    # 객체 인식 실행 명령 토픽 구독
+    # 객체인식 실행 명령 토픽 구독 설정
     rospy.Subscriber('/start_detection', String, detection_callback)
-    
     rospy.loginfo("YOLO detection node is ready and waiting for commands...")
-    rospy.spin()
 
+    rospy.spin() # 메시지가 들어오면 콜백 실행
+
+    create_gui(simulate_detection_update)
 
 if __name__ == "__main__":
     main()
