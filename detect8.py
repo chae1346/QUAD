@@ -12,16 +12,22 @@ from utils.general import check_file, check_img_size, non_max_suppression, scale
 from utils.torch_utils import select_device, time_sync
 from utils.plots import Annotator, colors
 import cv2
+import threading
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 
-
+text_widget = None
+ooriginal_list = {
+    "person": 2,
+    "TV": 1,
+    "desk": 5
+}
 
 
 def log_message(message, text_widget):
     print(message)  # Output to terminal
-    text_widget.insert(tk.END, message + "\n")
-    text_widget.see(tk.END)
+    # text_widget.insert(tk.END, message + "\n")
+    # text_widget.see(tk.END)
 
 def print_format(data):
     return "\n".join(f"{key}: {value}" for key, value in data.items())
@@ -41,7 +47,7 @@ def update_list_memory(original_list, detected_data, text_widget):
 
     return original_list
 
-def create_gui(simulation_function):
+"""def create_gui():
     # Create a GUI window
     root = tk.Tk()
     root.title("Real-Time List Update Viewer")
@@ -51,7 +57,7 @@ def create_gui(simulation_function):
     text_widget.pack(padx=10, pady=10)
 
     # Start the GUI loop
-    root.mainloop()
+    root.mainloop()"""
 
 @torch.no_grad()
 def run(
@@ -183,10 +189,10 @@ def detection_callback(msg):
 def main():
     rospy.init_node('yolo_detection_node', anonymous=True)
 
-    # GUI 실행을 별도의 스레드에서 실행
-    gui_thread = threading.Thread(target=create_gui, args=(simulate_detection_update,))
+    """# GUI 실행을 별도의 스레드에서 실행
+    gui_thread = threading.Thread(target=create_gui)
     gui_thread.daemon = True
-    gui_thread.start()
+    gui_thread.start()"""
 
     # 객체인식 실행 명령 토픽 구독 설정
     rospy.Subscriber('/start_detection', String, detection_callback)
